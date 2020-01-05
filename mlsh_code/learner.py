@@ -106,6 +106,7 @@ class Learner:
         self.assign_old_eq_new()
         for _ in range(self.optim_epochs):
             for batch in d.iterate_once(optim_batchsize):
+                print('ac', batch["ac"])
                 g = self.master_loss(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"])
                 self.master_adam.update(g, 0.01, 1)
 
@@ -114,7 +115,7 @@ class Learner:
         lens, rews = map(flatten_lists, zip(*listoflrpairs))
         logger.record_tabular("EpRewMean", np.mean(rews))
 
-        return np.mean(rews), np.mean(seg["ep_rets"])
+        return np.mean(rews), np.mean(seg["ep_rets_without_cost"])
 
     def updateSubPolicies(self, test_segs, num_batches, optimize=True):
         for i in range(self.num_subpolicies):

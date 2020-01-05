@@ -1,5 +1,8 @@
 import argparse
 import tensorflow as tf
+import sys
+sys.path.insert(0, '/home/csc63182/testspace/mlsh/gym')
+sys.path.insert(0, '/home/csc63182/testspace/mlsh/rl-algs')
 parser = argparse.ArgumentParser()
 parser.add_argument('savename', type=str)
 parser.add_argument('--task', type=str)
@@ -12,6 +15,9 @@ parser.add_argument('--force_subpolicy', type=int)
 parser.add_argument('--replay', type=str)
 parser.add_argument('-s', action='store_true')
 parser.add_argument('--continue_iter', type=str)
+parser.add_argument('--policy-cost-coef', type=float, default=2.9e-4)
+parser.add_argument("--sub-hidden-sizes", nargs="*", type=int, default=[64, 256])
+parser.add_argument("--sub-policy-costs", nargs="*", type=float, default=[0, 0])
 args = parser.parse_args()
 
 # python main.py --task MovementBandits-v0 --num_subs 2 --macro_duration 10 --num_rollouts 1000 --warmup_time 60 --train_time 1 --replay True test
@@ -42,11 +48,10 @@ args.replay = str2bool(args.replay)
 
 RELPATH = osp.join(args.savename)
 LOGDIR = osp.join('/root/results' if sys.platform.startswith('linux') else '/tmp', RELPATH)
-
 def callback(it):
     if MPI.COMM_WORLD.Get_rank()==0:
         if it % 5 == 0 and it > 3 and not replay:
-            fname = osp.join("savedir/", 'checkpoints', '%.5i'%it)
+            fname = osp.join("savedir/", args.savename, 'checkpoints', '%.5i'%it)
             U.save_state(fname)
     if it == 0 and args.continue_iter is not None:
         fname = osp.join("savedir/"+args.savename+"/checkpoints/", str(args.continue_iter))

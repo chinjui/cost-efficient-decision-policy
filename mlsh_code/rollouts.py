@@ -2,7 +2,7 @@ import numpy as np
 import math
 import time
 
-def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic, args):
+def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic, args, sub_policy_costs, fixed_policy=None):
     replay = args.replay
     t = 0
     ac = env.action_space.sample()
@@ -15,8 +15,10 @@ def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic,
 
     cur_ep_ret = 0
     cur_ep_len = 0
+    cur_ep_ret_without_cost = 0
     ep_rets = []
     ep_lens = []
+    ep_rets_without_cost = []
 
     # Initialize history arrays
     obs = np.array([ob for _ in range(horizon)])
@@ -45,6 +47,9 @@ def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic,
                 cur_subpolicy = args.force_subpolicy
                 z += 1
 
+            if fixed_policy is not None:
+              cur_subpolicy = fixed_policy
+
         ac, vpred = sub_policies[cur_subpolicy].act(stochastic, ob)
         # if np.random.uniform(0,1) < 0.05:
             # ac = env.action_space.sample()
@@ -53,11 +58,16 @@ def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic,
             # tt += 1
             # print(total)
             # total = [0,0]
-            dicti = {"ob" : obs, "rew" : rews, "vpred" : vpreds, "new" : news, "ac" : acs, "ep_rets" : ep_rets, "ep_lens" : ep_lens, "macro_ac" : macro_acs, "macro_vpred" : macro_vpreds}
+            if fixed_policy is None:
+                print("macro_acts:", macro_acs.mean())
+            dicti = {"ob" : obs, "rew" : rews, "vpred" : vpreds, "new" : news, "ac" : acs, "ep_rets" : ep_rets, "ep_lens" : ep_lens, "macro_ac" : macro_acs, "macro_vpred" : macro_vpreds, "ep_rets_without_cost": ep_rets_without_cost}
             yield {key: np.copy(val) for key,val in dicti.items()}
             ep_rets = []
             ep_lens = []
+            ep_rets_without_cost = []
+
             x += 1
+
 
         i = t % horizon
         obs[i] = ob
@@ -69,6 +79,8 @@ def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic,
             macro_vpreds[int(i/macrolen)] = macro_vpred
 
         ob, rew, new, info = env.step(ac)
+        cur_ep_ret_without_cost += rew
+        rew -= args.policy_cost_coef * sub_policy_costs[cur_subpolicy]
         rews[i] = rew
 
         if replay:
@@ -84,8 +96,10 @@ def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic,
         # if new:
             ep_rets.append(cur_ep_ret)
             ep_lens.append(cur_ep_len)
+            ep_rets_without_cost.append(cur_ep_ret_without_cost)
             cur_ep_ret = 0
             cur_ep_len = 0
+            cur_ep_ret_without_cost = 0
             ob = env.reset()
         t += 1
 
