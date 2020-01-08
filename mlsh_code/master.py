@@ -41,7 +41,7 @@ def start(callback, args, workerseed, rank, comm):
     sub_policies = [SubPolicy(name="sub_policy_%i" % x, ob=ob, ac_space=ac_space, hid_size=sub_hidden_sizes[x], num_hid_layers=2) for x in range(num_subs)]
     old_sub_policies = [SubPolicy(name="old_sub_policy_%i" % x, ob=ob, ac_space=ac_space, hid_size=sub_hidden_sizes[x], num_hid_layers=2) for x in range(num_subs)]
 
-    learner = Learner(env, policy, old_policy, sub_policies, old_sub_policies, comm, clip_param=0.2, entcoeff=0, optim_epochs=10, optim_stepsize=3e-5, optim_batchsize=64)
+    learner = Learner(env, policy, old_policy, sub_policies, old_sub_policies, comm, clip_param=0.2, entcoeff=0, optim_epochs=10, optim_stepsize=3e-5, optim_batchsize=64, args=args)
     rollout = rollouts.traj_segment_generator(policy, sub_policies, env, macro_duration, num_rollouts,
                                               stochastic=True, args=args, sub_policy_costs=sub_policy_costs)
     fixed_policy_rollouts = []
@@ -51,7 +51,7 @@ def start(callback, args, workerseed, rank, comm):
 
 
 
-    for x in range(10000):
+    for x in range(1):
         callback(x)
         if x == 0:
             learner.syncSubpolicies()

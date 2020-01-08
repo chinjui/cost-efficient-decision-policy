@@ -10,7 +10,7 @@ from collections import deque
 from dataset import Dataset
 
 class Learner:
-    def __init__(self, env, policy, old_policy, sub_policies, old_sub_policies, comm, clip_param=0.2, entcoeff=0, optim_epochs=10, optim_stepsize=3e-4, optim_batchsize=64):
+    def __init__(self, env, policy, old_policy, sub_policies, old_sub_policies, comm, clip_param=0.2, entcoeff=0, optim_epochs=10, optim_stepsize=3e-4, optim_batchsize=64, args=None):
         self.policy = policy
         self.clip_param = clip_param
         self.entcoeff = entcoeff
@@ -19,6 +19,7 @@ class Learner:
         self.optim_batchsize = optim_batchsize
         self.num_subpolicies = len(sub_policies)
         self.sub_policies = sub_policies
+        self.args = args
         ob_space = env.observation_space
         ac_space = env.action_space
 
@@ -28,9 +29,10 @@ class Learner:
         ac = policy.pdtype.sample_placeholder([None])
         atarg = tf.placeholder(dtype=tf.float32, shape=[None]) # Target advantage function (if applicable)
         ret = tf.placeholder(dtype=tf.float32, shape=[None]) # Empirical return
-        total_loss = self.policy_loss(policy, old_policy, ob, ac, atarg, ret, clip_param)
+        entcoeff = tf.placeholder(dtype=tf.float32, name="entcoef")
+        total_loss = self.policy_loss(policy, old_policy, ob, ac, atarg, ret, clip_param, entcoeff)
         self.master_policy_var_list = policy.get_trainable_variables()
-        self.master_loss = U.function([ob, ac, atarg, ret], U.flatgrad(total_loss, self.master_policy_var_list))
+        self.master_loss = U.function([ob, ac, atarg, ret, entcoeff], U.flatgrad(total_loss, self.master_policy_var_list))
         self.master_adam = MpiAdam(self.master_policy_var_list, comm=comm)
 
         self.assign_old_eq_new = U.function([],[], updates=[tf.assign(oldv, newv)
@@ -45,8 +47,8 @@ class Learner:
             varlist = sub_policies[i].get_trainable_variables()
             self.adams.append(MpiAdam(varlist))
             # loss for test
-            loss = self.policy_loss(sub_policies[i], old_sub_policies[i], ob, self.sp_ac, atarg, ret, clip_param)
-            self.losses.append(U.function([ob, self.sp_ac, atarg, ret], U.flatgrad(loss, varlist)))
+            loss = self.policy_loss(sub_policies[i], old_sub_policies[i], ob, self.sp_ac, atarg, ret, clip_param, entcoeff)
+            self.losses.append(U.function([ob, self.sp_ac, atarg, ret, entcoeff], U.flatgrad(loss, varlist)))
 
             self.assign_subs.append(U.function([],[], updates=[tf.assign(oldv, newv)
                 for (oldv, newv) in zipsame(old_sub_policies[i].get_variables(), sub_policies[i].get_variables())]))
@@ -65,7 +67,7 @@ class Learner:
         ])
 
 
-    def policy_loss(self, pi, oldpi, ob, ac, atarg, ret, clip_param):
+    def policy_loss(self, pi, oldpi, ob, ac, atarg, ret, clip_param, entcoeff):
         ratio = tf.exp(pi.pd.logp(ac) - tf.clip_by_value(oldpi.pd.logp(ac), -20, 20)) # advantage * pnew / pold
         surr1 = ratio * atarg
         surr2 = U.clip(ratio, 1.0 - clip_param, 1.0 + clip_param) * atarg
@@ -74,7 +76,8 @@ class Learner:
         vpredclipped = oldpi.vpred + tf.clip_by_value(pi.vpred - oldpi.vpred, -clip_param, clip_param)
         vfloss2 = tf.square(vpredclipped - ret)
         vf_loss = .5 * U.mean(tf.maximum(vfloss1, vfloss2))
-        total_loss = pol_surr + vf_loss
+        total_loss = pol_surr + vf_loss - U.mean(pi.pd.entropy()) * entcoeff
+        # total_loss = tf.Print(total_loss, [U.mean(pi.pd.entropy()), entcoeff], message="entropy and coef")
         return total_loss
 
     def syncMasterPolicies(self):
@@ -106,8 +109,8 @@ class Learner:
         self.assign_old_eq_new()
         for _ in range(self.optim_epochs):
             for batch in d.iterate_once(optim_batchsize):
-                print('ac', batch["ac"])
-                g = self.master_loss(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"])
+                # print('ac', batch["ac"])
+                g = self.master_loss(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], self.args.entropy_coef)
                 self.master_adam.update(g, 0.01, 1)
 
         lrlocal = (seg["ep_lens"], seg["ep_rets"]) # local values
@@ -136,7 +139,7 @@ class Learner:
                 for k in range(self.optim_epochs):
                     m = 0
                     for test_batch in test_d.iterate_times(test_batchsize, num_batches):
-                        test_g = self.losses[i](test_batch["ob"], test_batch["ac"], test_batch["atarg"], test_batch["vtarg"])
+                        test_g = self.losses[i](test_batch["ob"], test_batch["ac"], test_batch["atarg"], test_batch["vtarg"], 0)
                         self.adams[i].update(test_g, self.optim_stepsize, 1)
                         m += 1
             else:

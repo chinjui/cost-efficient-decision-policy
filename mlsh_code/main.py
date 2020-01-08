@@ -2,7 +2,7 @@ import argparse
 import tensorflow as tf
 import sys
 sys.path.insert(0, '/home/csc63182/testspace/mlsh/gym')
-sys.path.insert(0, '/home/csc63182/testspace/mlsh/rl-algs')
+sys.path.insert(0, '/home/csc63182/testspace/mlsh_cheetah/rl-algs')
 parser = argparse.ArgumentParser()
 parser.add_argument('savename', type=str)
 parser.add_argument('--task', type=str)
@@ -16,6 +16,7 @@ parser.add_argument('--replay', type=str)
 parser.add_argument('-s', action='store_true')
 parser.add_argument('--continue_iter', type=str)
 parser.add_argument('--policy-cost-coef', type=float, default=2.9e-4)
+parser.add_argument('--entropy-coef', type=float, default=1.)
 parser.add_argument("--sub-hidden-sizes", nargs="*", type=int, default=[64, 256])
 parser.add_argument("--sub-policy-costs", nargs="*", type=float, default=[0, 0])
 args = parser.parse_args()
