@@ -8,6 +8,7 @@ parser.add_argument('savename', type=str)
 parser.add_argument('--task', type=str)
 parser.add_argument('--num_subs', type=int)
 parser.add_argument('--macro_duration', type=int)
+parser.add_argument('--seed', type=int, default=1401)
 parser.add_argument('--num_rollouts', type=int)
 parser.add_argument('--warmup_time', type=int)
 parser.add_argument('--train_time', type=int)
@@ -61,7 +62,8 @@ def callback(it):
 
 def train():
     num_timesteps=1e9
-    seed = 1401
+    # seed = 1401
+    seed = args.seed
     rank = MPI.COMM_WORLD.Get_rank()
     sess = U.single_threaded_session()
     sess.__enter__()

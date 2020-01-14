@@ -58,7 +58,7 @@ def traj_segment_generator(pi, sub_policies, env, macrolen, horizon, stochastic,
             # tt += 1
             # print(total)
             # total = [0,0]
-            if fixed_policy is None:
+            if fixed_policy is None and len(sub_policies) != 1:
                 print("macro_acts:", macro_acs.mean())
             dicti = {"ob" : obs, "rew" : rews, "vpred" : vpreds, "new" : news, "ac" : acs, "ep_rets" : ep_rets, "ep_lens" : ep_lens, "macro_ac" : macro_acs, "macro_vpred" : macro_vpreds, "ep_rets_without_cost": ep_rets_without_cost}
             yield {key: np.copy(val) for key,val in dicti.items()}

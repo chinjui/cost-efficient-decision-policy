@@ -96,7 +96,8 @@ def start(callback, args, workerseed, rank, comm):
 
             # evaluate sub-policies seperately
             if mini_ep % 50 == 0:
-                print("macro acts:", rolls['macro_ac'])
+                if args.num_subs != 1:
+                    print("macro acts:", rolls['macro_ac'])
                 for i, fix_policy_rollout in enumerate(fixed_policy_rollouts):
                     collected_rolls = []
                     for _ in range(10):
